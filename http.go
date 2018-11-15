@@ -1402,6 +1402,11 @@ func (resp *Response) Write(w *bufio.Writer) error {
 		return err
 	}
 	if sendBody {
+		if bodyLen > w.Size() {
+			if err := w.Flush(); err != nil {
+				return err
+			}
+		}
 		if _, err := w.Write(body); err != nil {
 			return err
 		}
