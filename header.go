@@ -35,6 +35,9 @@ type ResponseHeader struct {
 	h     []argsKV
 	bufKV argsKV
 
+	hRawKv     [][2][]byte
+	hRawLines  [][]byte
+
 	cookies []argsKV
 }
 
@@ -658,6 +661,8 @@ func (h *ResponseHeader) resetSkipNormalize() {
 	h.server = h.server[:0]
 
 	h.h = h.h[:0]
+	h.hRawKv = h.hRawKv[:0]
+	h.hRawLines = h.hRawLines[:0]
 	h.cookies = h.cookies[:0]
 }
 
@@ -703,6 +708,8 @@ func (h *ResponseHeader) CopyTo(dst *ResponseHeader) {
 	dst.contentType = append(dst.contentType[:0], h.contentType...)
 	dst.server = append(dst.server[:0], h.server...)
 	dst.h = copyArgs(dst.h, h.h)
+	dst.hRawKv = append(dst.hRawKv[:0], h.hRawKv...)
+	dst.hRawLines = append(dst.hRawLines[:0], h.hRawLines...)
 	dst.cookies = copyArgs(dst.cookies, h.cookies)
 }
 
@@ -901,6 +908,16 @@ func (h *RequestHeader) del(key []byte) {
 func (h *ResponseHeader) Add(key, value string) {
 	k := getHeaderKeyBytes(&h.bufKV, key, h.disableNormalizing)
 	h.h = appendArg(h.h, b2s(k), value, argsHasValue)
+}
+
+func (h *ResponseHeader) AddRawKv(key, value []byte) {
+	// NOTE:  Without the double `s2b(b2s(...))` for some reason we lose quite some performance...  WTF!!!
+	h.hRawKv = append(h.hRawKv, [2][]byte{s2b(b2s(key)), s2b(b2s(value))})
+}
+
+func (h *ResponseHeader) AddRawLines(lines []byte) {
+	// NOTE:  Without the double `s2b(b2s(...))` for some reason we lose quite some performance...  WTF!!!
+	h.hRawLines = append(h.hRawLines, s2b(b2s(lines)))
 }
 
 // AddBytesK adds the given 'key: value' header.
@@ -1514,6 +1531,14 @@ func (h *ResponseHeader) AppendBytes(dst []byte) []byte {
 		if !bytes.Equal(kv.key, strDate) {
 			dst = appendHeaderLine(dst, kv.key, kv.value)
 		}
+	}
+
+	for i, n := 0, len(h.hRawKv); i < n; i++ {
+		kv := &h.hRawKv[i]
+		dst = appendHeaderLine(dst, kv[0], kv[1])
+	}
+	for i, n := 0, len(h.hRawLines); i < n; i++ {
+		dst = append(dst, h.hRawLines[i]...)
 	}
 
 	n := len(h.cookies)
